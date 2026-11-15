@@ -1,1 +1,100 @@
-<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=privacy.html"><a href="privacy.html">FloatCam Privacy Policy</a>
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0f0f12" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>相册管家 — 滑划整理</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>相册管家</h1>
+        <p>左滑删除 · 右滑保留。整理完成后统一复核再确认删除。</p>
+      </header>
+
+      <div class="toolbar">
+        <button type="button" class="btn btn-primary" id="pick-files">选择照片</button>
+        <button type="button" class="btn" id="pick-folder">选择文件夹</button>
+        <input
+          id="file-input"
+          type="file"
+          accept="image/*"
+          multiple
+          class="hidden"
+        />
+      </div>
+
+      <section id="organize-panel" class="panel active">
+        <div class="stats">
+          <span>剩余 <strong id="stat-remain">0</strong></span>
+          <span>待删 <strong id="stat-delete">0</strong></span>
+          <span>保留 <strong id="stat-keep">0</strong></span>
+        </div>
+
+        <div id="mode-banner" class="banner hidden" role="status"></div>
+
+        <div class="stage" id="stage">
+          <div id="card-stack" class="card-stack"></div>
+          <div class="action-row" id="organize-actions">
+            <button
+              type="button"
+              class="action-round delete"
+              id="btn-swipe-delete"
+              aria-label="删除"
+              title="删除"
+            >
+              ✕
+            </button>
+            <button
+              type="button"
+              class="action-round keep"
+              id="btn-swipe-keep"
+              aria-label="保留"
+              title="保留"
+            >
+              ♥
+            </button>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="btn-review" disabled>
+          复核删除
+        </button>
+      </section>
+
+      <section id="review-panel" class="panel">
+        <p id="review-summary"></p>
+        <div id="review-grid" class="review-grid"></div>
+        <div class="toolbar">
+          <button type="button" class="btn" id="btn-back">返回继续整理</button>
+          <button type="button" class="btn btn-danger" id="btn-confirm-delete">
+            确认删除
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div id="confirm-dialog" class="dialog-backdrop" role="dialog" aria-modal="true">
+      <div class="dialog">
+        <h2>确认删除</h2>
+        <p id="dialog-text"></p>
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="dialog-cancel">取消</button>
+          <button type="button" class="btn btn-danger" id="dialog-ok">确认</button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <a href="privacy.html">隐私政策</a>
+    </footer>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
