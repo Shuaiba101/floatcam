@@ -48,6 +48,66 @@ header p {
   line-height: 1.4;
 }
 
+.install-help {
+  margin-bottom: 12px;
+  border: 1px solid #2a2a36;
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 8px 12px;
+  font-size: 0.82rem;
+}
+
+.install-help summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.install-help-body {
+  margin-top: 8px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.install-help-body p {
+  margin: 0 0 8px;
+}
+
+.install-note {
+  font-size: 0.78rem;
+  color: #a8b4c4;
+}
+
+.card-loading {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.card-decode-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+  gap: 12px;
+}
+
+.card-decode-error p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.card-filename {
+  font-size: 0.8rem;
+  color: var(--text);
+  word-break: break-all;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;

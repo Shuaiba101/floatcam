@@ -20,6 +20,14 @@
       <header>
         <h1>相册管家</h1>
         <p>左滑删除 · 右滑保留。整理完成后统一复核再确认删除。</p>
+        <details class="install-help" id="install-help">
+          <summary>如何添加到手机主屏幕？</summary>
+          <div class="install-help-body">
+            <p><strong>Android（Chrome / Edge）</strong>：打开本页后点浏览器右上角菜单，选择「添加到主屏幕」或「安装应用」。</p>
+            <p><strong>iPhone / iPad（Safari）</strong>：点底部分享按钮 <span aria-hidden="true">⎙</span>，向下滑动并点「添加到主屏幕」。请用 Safari 打开（微信内置浏览器需先在外部浏览器打开）。</p>
+            <p class="install-note">提示：iOS 上暂不支持像桌面 Chrome 那样选择整个文件夹；可用「选择照片」导入。安装后图标可离线打开应用外壳，照片数据仍只存在本机。</p>
+          </div>
+        </details>
       </header>
 
       <div class="toolbar">
@@ -42,6 +50,7 @@
         </div>
 
         <div id="restore-banner" class="banner banner-info hidden" role="status"></div>
+        <div id="folder-sync-banner" class="banner banner-info hidden" role="status"></div>
         <div id="mode-banner" class="banner hidden" role="status"></div>
 
         <div class="stage" id="stage">

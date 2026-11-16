@@ -76,3 +76,15 @@ export async function relinkFolderHandles(dirHandle, items) {
     if (item) item.handle = entry;
   }
 }
+
+/** @param {FileSystemDirectoryHandle} dirHandle */
+export async function listImageFileEntries(dirHandle, isImageName) {
+  const entries = [];
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind === 'file' && isImageName(entry.name)) {
+      entries.push(entry);
+    }
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+  return entries;
+}

@@ -4,7 +4,9 @@ import {
   clearSession,
   ensureDirPermission,
   relinkFolderHandles,
+  listImageFileEntries,
 } from './storage.js';
+import { prepareDisplaySource, revokeDisplayUrl } from './images.js';
 
 const IMAGE_RE = /\.(jpe?g|png|gif|webp|bmp|heic|heif|avif)$/i;
 
@@ -38,6 +40,7 @@ const els = {
   reviewSummary: document.getElementById('review-summary'),
   modeBanner: document.getElementById('mode-banner'),
   restoreBanner: document.getElementById('restore-banner'),
+  folderSyncBanner: document.getElementById('folder-sync-banner'),
   btnBack: document.getElementById('btn-back'),
   btnConfirmDelete: document.getElementById('btn-confirm-delete'),
   dialog: document.getElementById('confirm-dialog'),
@@ -50,9 +53,13 @@ const els = {
 
 const SWIPE_THRESHOLD = 90;
 const MAX_ROTATION = 12;
+const FOLDER_POLL_MS = 4500;
 
 let persistTimer = null;
 let bootstrapped = false;
+let folderWatchTimer = null;
+let folderSyncHideTimer = null;
+let renderGen = 0;
 
 function isImageName(name) {
   return IMAGE_RE.test(name);
@@ -72,6 +79,7 @@ function revokeItem(item) {
     URL.revokeObjectURL(item._url);
     item._url = null;
   }
+  revokeDisplayUrl(item);
 }
 
 function itemDecision(item) {
@@ -109,6 +117,7 @@ async function persistSession() {
         decision: item.decision ?? itemDecision(item),
         type: item.file.type || blob.type || 'image/jpeg',
         lastModified: item.file.lastModified || Date.now(),
+        displayError: item.displayError || null,
       };
     }),
   );
@@ -141,6 +150,7 @@ async function restoreSession(snapshot) {
       file,
       handle: null,
       decision: row.decision || 'pending',
+      displayError: row.displayError || null,
     };
   });
 
@@ -153,8 +163,10 @@ async function restoreSession(snapshot) {
 
   if (state.mode === 'folder' && state.dirHandle) {
     const ok = await ensureDirPermission(state.dirHandle);
-    if (ok) await relinkFolderHandles(state.dirHandle, state.items);
-    else {
+    if (ok) {
+      await relinkFolderHandles(state.dirHandle, state.items);
+      startFolderWatch();
+    } else {
       els.modeBanner.textContent =
         '文件夹权限已失效，刷新后无法从磁盘删除；仍可复核并移除队列中的标记。请重新选择文件夹以恢复写入。';
       els.modeBanner.classList.remove('hidden');
@@ -199,7 +211,7 @@ function setModeBanner() {
   }
   if (state.mode === 'folder') {
     const label = state.folderName ? `「${state.folderName}」` : '文件夹';
-    els.modeBanner.textContent = `已从${label}加载。确认删除后将从磁盘永久删除这些文件，请谨慎操作。`;
+    els.modeBanner.textContent = `已从${label}加载；将自动检测文件夹内新增/删除的照片。确认删除后才会从磁盘永久删除，请谨慎操作。`;
     els.modeBanner.classList.remove('hidden');
   } else if (state.mode === 'files') {
     els.modeBanner.textContent =
@@ -213,6 +225,7 @@ function setModeBanner() {
 }
 
 async function resetSession({ clearStore = true } = {}) {
+  stopFolderWatch();
   state.items.forEach(revokeItem);
   state.items = [];
   state.index = 0;
@@ -256,28 +269,130 @@ async function loadFromFileList(fileList) {
   schedulePersist();
 }
 
+async function entriesToItems(entries) {
+  const items = [];
+  for (const entry of entries) {
+    const file = await entry.getFile();
+    items.push({
+      id: newItemId(),
+      file,
+      name: entry.name,
+      handle: entry,
+      decision: 'pending',
+    });
+  }
+  return items;
+}
+
 async function loadFromDirectory(dirHandle) {
   if (state.items.length && !confirm('导入新文件夹将替换当前会话，确定继续？')) return;
   await resetSession({ clearStore: false });
   state.dirHandle = dirHandle;
   state.folderName = dirHandle.name;
   state.mode = 'folder';
-  const entries = [];
-  for await (const entry of dirHandle.values()) {
-    if (entry.kind === 'file' && isImageName(entry.name)) {
+  const entries = await listImageFileEntries(dirHandle, isImageName);
+  state.items = await entriesToItems(entries);
+  setModeBanner();
+  updateStats();
+  renderCard();
+  schedulePersist();
+  startFolderWatch();
+}
+
+function stopFolderWatch() {
+  if (folderWatchTimer) {
+    clearInterval(folderWatchTimer);
+    folderWatchTimer = null;
+  }
+}
+
+function startFolderWatch() {
+  if (state.mode !== 'folder' || !state.dirHandle) return;
+  stopFolderWatch();
+  folderWatchTimer = setInterval(() => {
+    syncFolderQueue().catch((err) => console.warn('文件夹同步失败', err));
+  }, FOLDER_POLL_MS);
+}
+
+function showFolderSyncBanner(added, removed) {
+  if (!els.folderSyncBanner) return;
+  const parts = [];
+  if (added) parts.push(`新增 ${added} 张`);
+  if (removed) parts.push(`移除 ${removed} 张`);
+  els.folderSyncBanner.textContent = `文件夹有变化：${parts.join('，')}。已保留你的删/留决定。`;
+  els.folderSyncBanner.classList.remove('hidden');
+  clearTimeout(folderSyncHideTimer);
+  folderSyncHideTimer = setTimeout(() => {
+    els.folderSyncBanner.classList.add('hidden');
+  }, 6000);
+}
+
+async function syncFolderQueue() {
+  if (state.mode !== 'folder' || !state.dirHandle || state.view === 'review') return;
+  const ok = await ensureDirPermission(state.dirHandle);
+  if (!ok) return;
+
+  const entries = await listImageFileEntries(state.dirHandle, isImageName);
+  const diskNames = new Set(entries.map((e) => e.name));
+  const byName = new Map(state.items.map((it) => [it.name, it]));
+  const activeId = currentItem()?.id;
+
+  let added = 0;
+  let removed = 0;
+  const nextItems = [];
+
+  for (const item of state.items) {
+    if (diskNames.has(item.name)) {
+      nextItems.push(item);
+    } else {
+      removed += 1;
+      revokeItem(item);
+      state.history = state.history.filter((h) => h.itemId !== item.id);
+    }
+  }
+
+  for (const entry of entries) {
+    let item = byName.get(entry.name);
+    if (!item) {
       const file = await entry.getFile();
-      entries.push({
+      item = {
         id: newItemId(),
         file,
         name: entry.name,
         handle: entry,
         decision: 'pending',
-      });
+      };
+      nextItems.push(item);
+      added += 1;
+    } else {
+      item.handle = entry;
+      const file = await entry.getFile();
+      if (file.lastModified !== item.file.lastModified || file.size !== item.file.size) {
+        revokeItem(item);
+        item.file = file;
+      }
     }
   }
-  entries.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
-  state.items = entries;
-  setModeBanner();
+
+  nextItems.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+  if (!added && !removed) return;
+
+  state.items = nextItems;
+  rebuildQueuesFromDecisions();
+
+  if (activeId) {
+    const still = state.items.find((it) => it.id === activeId);
+    if (still && (!still.decision || still.decision === 'pending')) {
+      state.index = state.items.indexOf(still);
+    } else {
+      const firstPending = state.items.findIndex(
+        (it) => !it.decision || it.decision === 'pending',
+      );
+      state.index = firstPending >= 0 ? firstPending : state.items.length;
+    }
+  }
+
+  showFolderSyncBanner(added, removed);
   updateStats();
   renderCard();
   schedulePersist();
@@ -300,7 +415,51 @@ function showEmpty() {
   els.cardStack.appendChild(div);
 }
 
-function renderCard() {
+async function setThumbImage(img, item) {
+  const { url, error } = await prepareDisplaySource(item, objectUrl);
+  if (error || !url) {
+    img.alt = item.name;
+    img.removeAttribute('src');
+    return error;
+  }
+  img.src = url;
+  img.alt = item.name;
+  return null;
+}
+
+function buildDecodeErrorCard(item, message) {
+  const card = document.createElement('div');
+  card.className = 'card card-decode-error';
+  const name = document.createElement('div');
+  name.className = 'card-filename';
+  name.textContent = item.name;
+  const text = document.createElement('p');
+  text.textContent = message;
+  const skip = document.createElement('button');
+  skip.type = 'button';
+  skip.className = 'btn';
+  skip.textContent = '跳过（稍后处理）';
+  skip.addEventListener('click', () => skipUndecodable(item));
+  card.append(name, text, skip);
+  return card;
+}
+
+function skipUndecodable(item) {
+  const idx = state.items.indexOf(item);
+  if (idx < 0) return;
+  state.items.splice(idx, 1);
+  state.items.push(item);
+  const firstPending = state.items.findIndex(
+    (it) => !it.decision || it.decision === 'pending',
+  );
+  state.index = firstPending >= 0 ? firstPending : state.items.length;
+  updateStats();
+  renderCard();
+  schedulePersist();
+}
+
+async function renderCard() {
+  const gen = ++renderGen;
   els.cardStack.innerHTML = '';
   const item = currentItem();
   if (!item) {
@@ -308,14 +467,20 @@ function renderCard() {
     return;
   }
 
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.dataset.index = String(state.index);
+  const loading = document.createElement('div');
+  loading.className = 'card card-loading';
+  loading.textContent = '加载预览…';
+  els.cardStack.appendChild(loading);
 
-  const img = document.createElement('img');
-  img.src = objectUrl(item);
-  img.alt = item.name;
-  img.draggable = false;
+  let displayError = item.displayError || null;
+  if (!displayError && !item._displayUrl) {
+    const result = await prepareDisplaySource(item, objectUrl);
+    if (gen !== renderGen) return;
+    displayError = result.error;
+  }
+
+  if (gen !== renderGen) return;
+  els.cardStack.innerHTML = '';
 
   const labelKeep = document.createElement('div');
   labelKeep.className = 'card-label keep';
@@ -325,9 +490,34 @@ function renderCard() {
   labelDelete.className = 'card-label delete';
   labelDelete.textContent = '删除';
 
+  let card;
+  if (displayError) {
+    card = buildDecodeErrorCard(item, displayError);
+    card.append(labelKeep, labelDelete);
+    attachDrag(card, labelKeep, labelDelete);
+    els.cardStack.appendChild(card);
+    return;
+  }
+
+  card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.index = String(state.index);
+
+  const img = document.createElement('img');
+  img.draggable = false;
   card.append(img, labelKeep, labelDelete);
   els.cardStack.appendChild(card);
   attachDrag(card, labelKeep, labelDelete);
+
+  const err = await setThumbImage(img, item);
+  if (gen !== renderGen) return;
+  if (err) {
+    els.cardStack.innerHTML = '';
+    card = buildDecodeErrorCard(item, err);
+    card.append(labelKeep, labelDelete);
+    attachDrag(card, labelKeep, labelDelete);
+    els.cardStack.appendChild(card);
+  }
 }
 
 function attachDrag(card, labelKeep, labelDelete) {
@@ -443,22 +633,27 @@ function showOrganize() {
   state.view = 'organize';
   els.organizePanel.classList.add('active');
   els.reviewPanel.classList.remove('active');
+  if (state.mode === 'folder' && state.dirHandle) startFolderWatch();
   updateStats();
   schedulePersist();
 }
 
-function showReview() {
+async function showReview() {
   state.view = 'review';
+  stopFolderWatch();
   els.organizePanel.classList.remove('active');
   els.reviewPanel.classList.add('active');
   els.reviewGrid.innerHTML = '';
-  state.toDelete.forEach((item) => {
+  for (const item of state.toDelete) {
     const img = document.createElement('img');
-    img.src = objectUrl(item);
     img.alt = item.name;
     img.title = item.name;
     els.reviewGrid.appendChild(img);
-  });
+    const err = await setThumbImage(img, item);
+    if (err) {
+      img.alt = `${item.name}（无法预览）`;
+    }
+  }
   const disk = state.mode === 'folder' && state.dirHandle;
   els.reviewSummary.textContent = `共 ${state.toDelete.length} 张待删除${
     disk ? '（将从文件夹中永久删除）' : '（仅标记；磁盘文件不会被自动删除）'

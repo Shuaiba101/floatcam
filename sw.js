@@ -1,4 +1,4 @@
-const CACHE = 'album-shell-v2';
+const CACHE = 'album-shell-v3';
 
 const PRECACHE = [
   './',
@@ -6,6 +6,7 @@ const PRECACHE = [
   './styles.css',
   './app.js',
   './storage.js',
+  './images.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './privacy.html',
