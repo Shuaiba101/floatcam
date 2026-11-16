@@ -8,7 +8,11 @@
     />
     <meta name="theme-color" content="#0f0f12" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="相册管家" />
     <title>相册管家 — 滑划整理</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon.svg" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -37,6 +41,7 @@
           <span>保留 <strong id="stat-keep">0</strong></span>
         </div>
 
+        <div id="restore-banner" class="banner banner-info hidden" role="status"></div>
         <div id="mode-banner" class="banner hidden" role="status"></div>
 
         <div class="stage" id="stage">
@@ -63,9 +68,15 @@
           </div>
         </div>
 
-        <button type="button" class="btn btn-primary" id="btn-review" disabled>
-          复核删除
-        </button>
+        <div class="toolbar toolbar-bottom">
+          <button type="button" class="btn" id="btn-undo" disabled>撤销</button>
+          <button type="button" class="btn btn-primary" id="btn-review" disabled>
+            复核删除
+          </button>
+          <button type="button" class="btn" id="btn-clear-session" disabled>
+            清除会话
+          </button>
+        </div>
       </section>
 
       <section id="review-panel" class="panel">

@@ -55,6 +55,11 @@ header p {
   margin-bottom: 12px;
 }
 
+.toolbar-bottom {
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
 .btn {
   border: none;
   border-radius: 12px;
@@ -221,6 +226,13 @@ header p {
   border-radius: 10px;
   font-size: 0.8rem;
   line-height: 1.35;
+  margin-bottom: 8px;
+}
+
+.banner-info {
+  background: #162a1f;
+  border-color: #2d5a3d;
+  color: #c8f5d8;
 }
 
 .dialog-backdrop {

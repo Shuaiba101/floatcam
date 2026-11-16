@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="相册管家">
+  <rect width="512" height="512" rx="108" fill="#0f0f12"/>
+  <rect x="72" y="96" width="368" height="320" rx="48" fill="#1a1a22" stroke="#6366f1" stroke-width="16"/>
+  <circle cx="200" cy="200" r="48" fill="#22c55e"/>
+  <path d="M120 352l88-96 64 72 48-56 72 80H120z" fill="#6366f1" opacity="0.9"/>
+  <text x="360" y="168" font-family="system-ui,sans-serif" font-size="72" font-weight="700" fill="#ef4444">✕</text>
+  <text x="88" y="168" font-family="system-ui,sans-serif" font-size="56" font-weight="700" fill="#22c55e">♥</text>
+</svg>
